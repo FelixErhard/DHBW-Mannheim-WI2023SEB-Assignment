@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Lamp UI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>💡 Smart Lamp Bedienoberfläche</h1>
+
+<div class="lamp" id="lamp"></div>
+
+<div class="status-box" id="statusBox">
+    Lampe ist AUS
+</div>
+
+<section class="controls">
+    <button id="toggleBtn">Lampe Einschalten</button>
+
+    <label for="brightness">🔆 Helligkeit:</label>
+    <input type="range" id="brightness" min="0" max="100" value="100">
+    <span id="brightnessValue">100%</span>
+
+    <label for="color">🎨 Farbe auswählen:</label>
+    <input type="color" id="color" value="#ffffff">
+
+    <label for="morseInput">📡 Morsecode-Nachricht:</label>
+    <input type="text" id="morseInput" placeholder="Text eingeben...">
+    <button id="morseBtn">Morsecode abspielen</button>
+</section>
+
+<script>
+    // UI-Zustände
+    const lamp = document.getElementById("lamp");
+    const toggleBtn = document.getElementById("toggleBtn");
+    const brightnessInput = document.getElementById("brightness");
+    const brightnessValue = document.getElementById("brightnessValue");
+    const colorInput = document.getElementById("color");
+    const statusBox = document.getElementById("statusBox");
+
+    let isOn = false;
+    let brightness = 100;
+    let color = "#ffffff";
+
+    function updateLamp() {
+        lamp.style.backgroundColor = isOn ? color : "#222";
+        lamp.style.opacity = isOn ? brightness / 100 : 0.2;
+        toggleBtn.textContent = isOn ? "Lampe Ausschalten" : "Lampe Einschalten";
+
+        const hexToName = {
+            "#ffffff": "Weiß", "#ff0000": "Rot", "#00ff00": "Grün", "#0000ff": "Blau"
+        };
+        const colorName = hexToName[color.toLowerCase()] || color;
+
+        statusBox.textContent = `Lampe ist ${isOn ? "AN" : "AUS"}, Farbe: ${colorName}, Helligkeit: ${brightness}%`;
+    }
+
+    toggleBtn.addEventListener("click", () => {
+        isOn = !isOn;
+        updateLamp();
+    });
+
+    brightnessInput.addEventListener("input", () => {
+        brightness = brightnessInput.value;
+        brightnessValue.textContent = `${brightness}%`;
+        updateLamp();
+    });
+
+    colorInput.addEventListener("input", () => {
+        color = colorInput.value;
+        updateLamp();
+    });
+
+    updateLamp(); // Initialer Zustand
+</script>
+</body>
+</html>
