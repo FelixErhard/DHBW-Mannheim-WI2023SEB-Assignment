@@ -3,7 +3,83 @@
 <head>
   <meta charset="UTF-8">
   <title>Smart Lamp UI</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .lamp {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      margin: 20px auto;
+      background-color: #222;
+      box-shadow: 0 0 30px rgba(255, 255, 0, 0.1);
+      transition: all 0.3s ease;
+    }
+    .status-box {
+      background-color: #e3f2fd;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      text-align: center;
+      transition: background-color 0.3s ease;
+    }
+    .controls {
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    input, button {
+      margin-top: 5px;
+    }
+    button {
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      margin-right: 10px;
+    }
+    button:hover {
+      background-color: #388e3c;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    .morse-section {
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid #eee;
+    }
+    .morse-section input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    .morse-status {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #f1f8e9;
+      border-radius: 4px;
+    }
+  </style>
 </head>
 <body>
 <h1>💡 Smart Lamp Steuerung</h1>
@@ -12,21 +88,24 @@
 <div class="lamp" id="lamp"></div>
 
 <!-- Textuelle Statusanzeige -->
-<div class="status-box" id="statusBox">Lampe ist AUS</div>
+<div class="status-box" id="statusBox">Verbindung wird hergestellt...</div>
 
 <section class="controls">
-  <button id="toggleBtn">Lampe Einschalten</button>
+  <button id="toggleBtn" disabled>Lampe Einschalten</button>
 
   <label for="brightness">🔆 Helligkeit:</label>
-  <input type="range" id="brightness" min="0" max="100" value="100">
+  <input type="range" id="brightness" min="0" max="100" value="100" disabled>
   <span id="brightnessValue">100%</span>
 
   <label for="color">🎨 Farbe:</label>
-  <input type="color" id="color" value="#ffffff">
+  <input type="color" id="color" value="#ffffff" disabled>
 
-  <label for="morseInput">📡 Morsecode-Nachricht:</label>
-  <input type="text" id="morseInput" placeholder="Text eingeben...">
-  <button id="morseBtn">Morsecode abspielen</button>
+  <div class="morse-section">
+    <label for="morseInput">📡 Morsecode-Nachricht:</label>
+    <input type="text" id="morseInput" placeholder="Text eingeben..." disabled>
+    <button id="morseBtn" disabled>Morsecode abspielen</button>
+    <div class="morse-status" id="morseStatus" style="display: none;"></div>
+  </div>
 </section>
 
 <script>
@@ -36,68 +115,145 @@
   const colorInput = document.getElementById("color");
   const statusBox = document.getElementById("statusBox");
   const lamp = document.getElementById("lamp");
+  const morseInput = document.getElementById("morseInput");
+  const morseBtn = document.getElementById("morseBtn");
+  const morseStatus = document.getElementById("morseStatus");
 
   let isOn = false;
   let brightness = 100;
   let color = "#ffffff";
-
-  async function updateStatus(message, success = true) {
+  let socket = null;
+  let isMorseActive = false;
+  
+  // WebSocket-Verbindung herstellen
+  function connectWebSocket() {
+    // WebSocket-URL bestimmen
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${protocol}://${window.location.host}/ws`;
+    
+    // WebSocket erstellen
+    socket = new WebSocket(wsUrl);
+    
+    // WebSocket-Event-Handling
+    socket.onopen = function() {
+      updateStatus("Verbindung hergestellt");
+      enableControls(true);
+      
+      // Initialen Status anfragen
+      sendCommand('getStatus');
+    };
+    
+    socket.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("Nachricht empfangen:", data);
+        
+        if (data.type === 'getStatus' || data.type === 'status') {
+          updateLampView(data.state);
+        } else if (data.type === 'morseUpdate') {
+          updateMorseStatus(data);
+        } else if (data.type === 'error') {
+          updateStatus(data.message, false);
+        } else if (data.type === 'success') {
+          updateStatus(data.message, true);
+        }
+      } catch (error) {
+        console.error("Fehler beim Verarbeiten der Nachricht:", error);
+      }
+    };
+    
+    socket.onerror = function(error) {
+      console.error("WebSocket-Fehler:", error);
+      updateStatus("WebSocket-Verbindungsfehler", false);
+      enableControls(false);
+    };
+    
+    socket.onclose = function() {
+      updateStatus("Verbindung getrennt. Versuche erneut zu verbinden...", false);
+      enableControls(false);
+      
+      // Nach kurzer Zeit erneut verbinden
+      setTimeout(connectWebSocket, 3000);
+    };
+  }
+  
+  function updateStatus(message, success = true) {
     statusBox.textContent = message;
     statusBox.style.backgroundColor = success ? "#e3f2fd" : "#ffebee";
   }
 
-  async function sendRequest(endpoint, body = null) {
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : null
-      });
-      const data = await res.json();
-      updateStatus(data.message || "OK", res.ok);
-    } catch (err) {
-      updateStatus("Netzwerkfehler", false);
+  function enableControls(enabled = true) {
+    toggleBtn.disabled = !enabled;
+    brightnessInput.disabled = !enabled;
+    colorInput.disabled = !enabled;
+    morseInput.disabled = !enabled || isMorseActive;
+    morseBtn.disabled = !enabled || isMorseActive;
+  }
+
+  function sendCommand(command, value = null) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      updateStatus("Keine Verbindung zum Server", false);
+      return;
+    }
+    
+    const message = {
+      command: command
+    };
+    
+    if (value !== null) {
+      message.value = value;
+    }
+    
+    console.log("Sende Befehl:", message);
+    
+    // Kommando als JSON-String senden
+    socket.send(JSON.stringify(message));
+  }
+
+  function updateMorseStatus(data) {
+    if (data.status === 'started') {
+      isMorseActive = true;
+      morseStatus.textContent = "Morsecode wird gesendet...";
+      morseStatus.style.display = "block";
+      morseBtn.disabled = true;
+      morseInput.disabled = true;
+    } else if (data.status === 'progress') {
+      morseStatus.textContent = `Morsecode: ${data.progress}% abgeschlossen`;
+    } else if (data.status === 'completed') {
+      isMorseActive = false;
+      morseStatus.textContent = "Morsecode vollständig übertragen";
+      setTimeout(() => {
+        morseStatus.style.display = "none";
+        enableControls(true);
+      }, 3000);
     }
   }
 
-  toggleBtn.addEventListener("click", async () => {
-    isOn = !isOn;
-    await sendRequest(isOn ? "/api/lamp/on" : "/api/lamp/off");
-    toggleBtn.textContent = isOn ? "Lampe Ausschalten" : "Lampe Einschalten";
+  toggleBtn.addEventListener("click", () => {
+    const command = isOn ? 'off' : 'on';
+    sendCommand(command);
   });
 
-  brightnessInput.addEventListener("input", async () => {
+  brightnessInput.addEventListener("input", () => {
     brightness = Number(brightnessInput.value);
     brightnessValue.textContent = `${brightness}%`;
-    await sendRequest("/api/lamp/brightness", { value: brightness });
+  });
+  
+  brightnessInput.addEventListener("change", () => {
+    sendCommand('brightness', brightness);
   });
 
-  colorInput.addEventListener("input", async () => {
+  colorInput.addEventListener("change", () => {
     color = colorInput.value;
-    await sendRequest("/api/lamp/color", { value: color });
+    sendCommand('color', color);
   });
 
-  // Morse -> Jetzt mit API
-  document.getElementById("morseBtn").addEventListener("click", async () => {
-    const text = document.getElementById("morseInput").value;
-    await fetch("/api/lamp/morse", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text })
-    });
-  });
-
-
-  // Holt den echten Lampenzustand vom Consumer (via Docker-Service-Namen)
-  async function pollLampStatus() {
-    try {
-      const res = await fetch("/lamp/status");
-      const data = await res.json();
-      updateLampView(data);
-    } catch (err) {
-      updateStatus("Status konnte nicht geladen werden", false);
+  morseBtn.addEventListener("click", () => {
+    const text = morseInput.value.trim();
+    if (text) {
+      sendCommand('morse', text);
     }
-  }
+  });
 
   // Zeigt die Lampe basierend auf realem Zustand
   function updateLampView(state) {
@@ -115,9 +271,8 @@
     colorInput.value = color;
   }
 
-  // Status regelmäßig abfragen
-  setInterval(pollLampStatus, 200);
-  pollLampStatus(); // einmal beim Start
+  // WebSocket-Verbindung beim Laden der Seite herstellen
+  connectWebSocket();
 </script>
 </body>
 </html>

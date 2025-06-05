@@ -67,7 +67,7 @@ export class MockLampDevice implements ILampDevice {
   }
 
   // Lampe kurz an- und ausschalten
-  private async flash(duration: number) {
+  public async flash(duration: number) {
     this.state.poweredOn = true;
     console.log("Lampe AN");
     await this.pause(duration);

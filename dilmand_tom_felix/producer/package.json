@@ -10,12 +10,14 @@
   },
   "dependencies": {
     "@stomp/stompjs": "^7.0.0",
+    "@types/ws": "^8.18.1",
     "amqplib": "^0.10.3",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "ws": "^8.18.2"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.7",
