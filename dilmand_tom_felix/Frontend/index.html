@@ -67,16 +67,23 @@
         console.log('Erfolgreich mit RabbitMQ verbunden!', frame);
         updateStatus("Verbunden. Warte auf Status...", true);
 
+        // Wir versuchen den Exchange nicht mehr direkt zu erstellen,
+        // sondern abonnieren ihn direkt und vertrauen darauf, dass
+        // der Consumer ihn bereits erstellt hat
+        
         // 1. Status-Updates abonnieren
-        // Der Server soll nach jeder Änderung den neuen Zustand hierher senden.
         stompClient.subscribe(STATUS_TOPIC, (message) => {
-            const newStatus = JSON.parse(message.body);
-            console.log("Neuer Status empfangen:", newStatus);
-            updateLampView(newStatus);
+            try {
+                const newStatus = JSON.parse(message.body);
+                console.log("Neuer Status empfangen:", newStatus);
+                updateLampView(newStatus);
+            } catch (error) {
+                console.error("Fehler beim Parsen der Nachricht:", error);
+            }
         });
 
-        // 2. Initialen Status anfordern
-        // Wir senden einen Befehl, um den aktuellen Zustand zu erhalten.
+        // 2. Initialen Status anfordern - dies wird den Consumer aktivieren
+        // und sicherstellen, dass der Exchange erstellt wird
         sendCommand('get_status');
     };
 
@@ -107,8 +114,9 @@
 
     // Aktualisiert die visuelle Darstellung der Lampe basierend auf dem Zustand
     function updateLampView(state) {
+        console.log("updateLampView:", state); // <--- NEU
         lampState = state;
-        const { poweredOn, brightness, color } = state;
+        const { poweredOn, brightness, color, error, isMockDevice } = state;
 
         lamp.style.backgroundColor = poweredOn ? color : "#222";
         lamp.style.opacity = poweredOn ? (brightness / 100).toString() : "0.2";
@@ -118,7 +126,23 @@
         brightnessValue.textContent = `${brightness}%`;
         colorInput.value = color;
 
-        updateStatus(`Lampe ist ${poweredOn ? "AN" : "AUS"} | ${color} | ${brightness}%`, true);
+        // Zeige Fehlermeldung an, wenn vorhanden
+        if (error) {
+            updateStatus(`Fehler: ${error.message}`, false);
+            lamp.style.border = "2px solid red";
+            setTimeout(() => {
+                lamp.style.border = "none";
+            }, 3000);
+        } else if (isMockDevice) {
+            updateStatus("⚠️ Achtung: Es ist kein echtes Gerät verbunden (Mock-Modus).", true);
+            lamp.style.border = "2px dashed orange";
+            setTimeout(() => {
+                lamp.style.border = "none";
+            }, 3000);
+        } else {
+            updateStatus(`Lampe ist ${poweredOn ? "AN" : "AUS"} | ${color} | ${brightness}%`, true);
+            lamp.style.border = "none";
+        }
     }
 
     // Aktualisiert nur die Status-Text-Box

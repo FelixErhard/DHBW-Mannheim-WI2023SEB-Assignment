@@ -1,6 +1,7 @@
 import * as TPLink from 'tplink-bulbs';
 import { config } from 'dotenv';
-import { ILampDevice, ILampState } from '../types/ILamp';
+import { ILampDevice as ImportedLampDevice, ILampState } from '../types/ILamp';
+// import { Locals } from 'express';
 
 config();
 
@@ -8,8 +9,16 @@ const email = process.env.TPLINK_EMAIL;
 const password = process.env.TPLINK_PASSWORD;
 const deviceIP = process.env.TPLINK_DEVICE_IP;
 
+export interface LocalLampDevice {
+  turnOn(): Promise<void>;
+  turnOff(): Promise<void>;
+  setBrightness(brightnessLevel?: number): Promise<void>;
+  setColour(colour?: string): Promise<void>;
+  getCurrentState(): Promise<ILampState>;
+  getDeviceInfo(): Promise<any>; // Add getDeviceInfo method
+}
 
-export async function createTplinkDeviceConnection(): Promise<ILampDevice> {
+export async function createTplinkDeviceConnection(): Promise<LocalLampDevice> {
   if (!email || !password || !deviceIP) {
     throw new Error('TPLINK_EMAIL, TPLINK_PASSWORD, and TPLINK_DEVICE_IP must be set in .env');
   }
@@ -25,12 +34,12 @@ export async function createTplinkDeviceConnection(): Promise<ILampDevice> {
     color: 'white'
   };
 
-  const enhancedDevice: ILampDevice = {
+  const enhancedDevice: LocalLampDevice = {
     // Original methods
     getDeviceInfo: device.getDeviceInfo,
-    getEnergyUsage: device.getEnergyUsage,
-    setSaturation: device.setSaturation,
-    setHue: device.setHue,
+    
+    
+
 
     // Override methods to update local state
     turnOn: async () => {
@@ -62,15 +71,11 @@ export async function createTplinkDeviceConnection(): Promise<ILampDevice> {
       return { ...state };
     },
 
-    setHSL: function (hue: number, sat: number, lum: number): Promise<void> {
-      throw new Error('Function not implemented.');
-    }
+  
   };
 
   return enhancedDevice;
 }
-
-
 
 function hexToHSL(hex: string): { hue: number; sat: number; lum: number } {
   // Remove optional leading #

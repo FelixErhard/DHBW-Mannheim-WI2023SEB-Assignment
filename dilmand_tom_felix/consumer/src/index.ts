@@ -2,13 +2,13 @@
 import {RabbitMQConsumerService} from './services/RabbitMQConsumerService';
 import {closeRabbitMQConnection} from './config/rabbitmq';
 import { createTplinkDeviceConnection } from './config/tplink';
+import { MockLampDevice } from './config/mockLamp';
 
 
 async function main() {
-    const device = await createTplinkDeviceConnection();
+    const device = new MockLampDevice();
     if (!device) {
-        console.error("Failed to create TP-Link device connection.");
-        process.exit(1);
+        console.log("Failed to create TP-Link device connection.");
     }
     const consumer = new RabbitMQConsumerService(device);
     await consumer.start();

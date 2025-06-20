@@ -52,6 +52,7 @@ export async function createRabbitMQChannel(): Promise<amqp.Channel> {
         console.log('RabbitMQ channel created');
         await channel.assertQueue(rabbitMQConfig.lampCommandQueue, { durable: true });
         await channel.assertExchange(rabbitMQConfig.statusExchange, 'fanout', { durable: true });
+        console.log('Exchange lamp-status wurde angelegt!');
         return channel;
     } catch (error) {
         console.error('Failed to connect to RabbitMQ or create channel:', error);
